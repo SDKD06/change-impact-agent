@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: change-impact-agent
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/impactagent
+    username: postgres
+    password: postgres
+
+  ai:
+    ollama:
+      chat:
+        options:
+          model: qwen2.5
+          temperature: 0.0
+      embedding:
+        options:
+          model: nomic-embed-text
+    vectorstore:
+      pgvector:
+        initialize-schema: true # auto-creates the vector table on startup
+        dimensions: 768 # must match the embedding model above
+        index-type: hnsw
+
+# Point this at any Java repo you want to analyze (the folder containing src/)
+impactagent:
+  repo-path: ${REPO_PATH:./sample-repo}
+  max-file-chars: 8000 # cap on readFile output sent to the model
+
+logging:
+  level:
+    com.example.impactagent: INFO

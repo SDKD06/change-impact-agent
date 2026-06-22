@@ -1,0 +1,133 @@
+<div class="page">
+  <header class="header">
+    <div class="brand">
+      <div class="logo">◆</div>
+      <span class="brand-name">Change-Impact Agent</span>
+    </div>
+    <div class="status" [class.online]="connected()">
+      <span class="dot"></span>{{ connected() ? 'Connected' : 'Offline' }}
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="pill">Static analysis · AI risk reasoning</div>
+    <h1 class="headline">See what breaks<br /><span class="accent">before you break it.</span></h1>
+    <p class="subtitle">Enter a method name to trace its full impact across your codebase.</p>
+
+    <div class="search">
+      <input class="search-input" type="text" [(ngModel)]="method"
+             (keyup.enter)="run()" placeholder="e.g. swap" />
+      <button class="analyze-btn" (click)="run()" [disabled]="loading()">Analyze Impact →</button>
+    </div>
+
+    <div class="examples">
+      <span class="try-label">Try:</span>
+      <button *ngFor="let ex of examples" class="chip" (click)="useExample(ex)">{{ ex }}</button>
+    </div>
+  </section>
+
+  <section class="state" *ngIf="loading()">
+    <div class="spinner"></div><p class="state-msg">{{ loadingMsg() }}</p>
+  </section>
+
+  <section class="error" *ngIf="error()">{{ error() }}</section>
+
+  <ng-container *ngIf="report() as r">
+    <section class="results">
+
+      <div class="risk-card" [style.borderColor]="riskColor() + '55'">
+        <span class="risk-badge" [style.background]="riskColor() + '22'" [style.color]="riskColor()">
+          ● {{ r.riskLevel }} risk
+        </span>
+        <div class="target">
+          <span class="target-label">TARGET</span>
+          <span class="target-name">{{ r.graph.nodes[0].label }}</span>
+        </div>
+        <p class="summary">{{ r.summary }}</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span class="stat-label">Methods affected</span><span class="stat-val">{{ r.stats.methodsAffected }}</span></div>
+        <div class="stat"><span class="stat-label">Files touched</span><span class="stat-val">{{ r.stats.filesTouched }}</span></div>
+        <div class="stat"><span class="stat-label">Max depth</span><span class="stat-val">{{ r.stats.maxDepth }} <small>hops</small></span></div>
+        <div class="stat"><span class="stat-label">Direct callers</span><span class="stat-val">{{ r.stats.directCallers }}</span></div>
+      </div>
+
+      <div class="columns">
+        <div class="col">
+          <div class="col-head"><span class="dot-red"></span> Direct breakage <span class="count">{{ r.directBreakage.length }}</span></div>
+          <p class="col-sub">Breaks on signature change</p>
+          <div class="empty" *ngIf="!r.directBreakage.length">Nothing breaks directly.</div>
+          <div class="method-row" *ngFor="let m of r.directBreakage">
+            <div><div class="m-name">{{ m.name }}</div><div class="m-file">{{ m.file }}:{{ m.line }}</div></div>
+            <span class="hop">HOP {{ m.hop }}</span>
+          </div>
+        </div>
+        <div class="col">
+          <div class="col-head"><span class="dot-amber"></span> Behavioral risk <span class="count">{{ r.behavioralRisk.length }}</span></div>
+          <p class="col-sub">Depends on current behavior</p>
+          <div class="empty" *ngIf="!r.behavioralRisk.length">No deeper behavioral dependents.</div>
+          <div class="method-row" *ngFor="let m of r.behavioralRisk">
+            <div><div class="m-name">{{ m.name }}</div><div class="m-file">{{ m.file }}:{{ m.line }}</div></div>
+            <span class="hop">HOP {{ m.hop }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="graph-card">
+        <div class="graph-head">
+          <div><h3>Dependency graph</h3><p>Force-directed view of downstream callers · arrows point caller → callee</p></div>
+          <div class="legend">
+            <span><i style="background:#3b82f6"></i>hop 1</span>
+            <span><i style="background:#60a5fa"></i>hop 2</span>
+            <span><i style="background:#fbbf24"></i>hop 3</span>
+            <span><i style="background:#f87171"></i>hop 4</span>
+          </div>
+        </div>
+        <svg viewBox="0 0 720 460" class="graph-svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#46577a" />
+            </marker>
+            <radialGradient id="rootGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+
+          <path *ngFor="let e of layoutEdges()" [attr.d]="edgePath(e)" [attr.stroke]="e.color"
+                fill="none" stroke-opacity="0.5" stroke-width="1.6" marker-end="url(#arrow)" />
+
+          <g *ngFor="let n of layoutNodes()">
+            <circle *ngIf="n.hop === 0" [attr.cx]="n.x" [attr.cy]="n.y" r="42" fill="url(#rootGlow)" />
+            <circle [attr.cx]="n.x" [attr.cy]="n.y" [attr.r]="n.hop === 0 ? 15 : 8"
+                    [attr.fill]="n.color" stroke="#0b0f16" stroke-width="2">
+              <title>{{ n.label }}</title>
+            </circle>
+            <text [attr.x]="n.x" [attr.y]="n.y - (n.hop === 0 ? 24 : 15)" text-anchor="middle"
+                  class="node-label" [class.center]="n.hop === 0">{{ n.label }}</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="report-card">
+        <div class="report-head">
+          <div><h3>Agent report</h3><p>AI written analysis & recommended checks</p></div>
+          <button class="gen-btn" *ngIf="!narrative() && !reportLoading()" (click)="generateNarrative()">Generate</button>
+        </div>
+        <div class="report-loading" *ngIf="reportLoading()"><div class="spinner small"></div> Writing analysis (local model, ~30s+)…</div>
+        <pre class="report-body" *ngIf="narrative()">{{ narrative() }}</pre>
+        <p class="report-hint" *ngIf="!narrative() && !reportLoading()">The cards above are instant (from the call graph). Click Generate for the AI written narrative.</p>
+      </div>
+
+    </section>
+  </ng-container>
+
+  <footer class="footer">
+    <span>© 2026 Change-Impact Agent</span>
+    <div class="stack">
+      <span class="tech">Spring Boot</span><span class="tech">Spring AI</span>
+      <span class="tech">pgvector</span><span class="tech">Ollama</span>
+    </div>
+  </footer>
+</div>
