@@ -1,4 +1,4 @@
-# Change-Impact Agent
+# Change-Impact Agent — Static Analysis + AI Explanations for Safe Refactoring
 
 > **"See what breaks before you break it."** — an AI agent that traces the full downstream impact of changing a method in a Java codebase, backed by a real call graph.
 
@@ -6,6 +6,43 @@ When you change a method in a large codebase, the scary question is _"what else 
 
 ![Impact analysis](docs/cards.png)
 ![Dependency graph](docs/graph.png)
+
+## Quick example
+
+```
+Input:   swap()      (in MaxHeap.java)
+
+Output:
+  Risk:            HIGH
+  Methods affected: 6
+  Files touched:    1
+  Max depth:        4 hops
+
+  Direct breakage (break on signature change):
+    - MaxHeap.toggleDown   (hop 1)
+    - MaxHeap.toggleUp      (hop 1)
+
+  Behavioral risk (depend on current behavior):
+    - MaxHeap.deleteElement (hop 2)
+    - MaxHeap.insertElement (hop 2)
+    - MaxHeap.extractMax    (hop 3)
+    - MaxHeap.getElement    (hop 4)
+```
+
+You name a method; it returns the real blast radius, ranked by how directly each caller is affected — plus an optional plain-language report. _(Numbers above are real output from analyzing [TheAlgorithms/Java](https://github.com/TheAlgorithms/Java).)_
+
+---
+
+## Why not just ask an LLM?
+
+Large codebases contain thousands of methods. An LLM can _reason_ about impact, but it cannot reliably _discover_ every transitive caller across an entire repository — it will miss some and invent others.
+
+Change-Impact Agent splits the job:
+
+- **Static analysis + graph traversal** find the affected code — exactly, no guessing.
+- **LLM reasoning** explains the consequences in plain language.
+
+The graph is the source of truth; the model only explains what the graph found. That's what keeps the analysis trustworthy.
 
 ---
 
@@ -75,7 +112,7 @@ Measured on **[TheAlgorithms/Java](https://github.com/TheAlgorithms/Java)** as t
 
 - **Scale:** built a call graph of **2,784 methods and 8,464 call edges**, and embedded **7,433 method chunks** into the vector store.
 - **Reference resolution: ~96.5%** — 8,464 of 8,770 call sites resolved; the remainder (library calls, complex generics) are skipped rather than guessed.
-- **Accuracy:** on a hand-verified ground-truth set of methods in `MaxHeap.java`, the call graph scored **100% precision and 100% recall** (7/7 caller relationships) via `POST /api/eval` — it never fabricates an edge and missed none of the resolvable ones.
+- **Accuracy (benchmark):** on a hand-verified ground-truth set of 5 methods / 7 caller relationships in `MaxHeap.java`, the call graph scored **100% precision and recall (7/7)** via `POST /api/eval`. This is a small, reproducible benchmark — not a blanket accuracy claim — chosen to verify the extraction never fabricates an edge and misses none of the resolvable ones. Expand the set in `EvalRunner.defaultSet()` to broaden it.
 
 Together these give a complete picture: large-scale coverage (96.5% across thousands of references) plus verified correctness on a labeled sample. The eval harness (`EvalRunner` + `/api/eval`) is reproducible — ingest the test repo and hit the endpoint to regenerate the numbers; expand `EvalRunner.defaultSet()` to broaden the verified set.
 
